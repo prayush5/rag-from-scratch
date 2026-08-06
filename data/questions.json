@@ -1,0 +1,142 @@
+[
+  {
+    "id": 1,
+    "title": "How do I use asyncio in Python?",
+    "language": "Python",
+    "category": "AsyncIO",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": 2,
+    "title": "FastAPI dependency injection example",
+    "language": "Python",
+    "category": "FastAPI",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": 3,
+    "title": "How to connect PostgreSQL using SQLAlchemy?",
+    "language": "Python",
+    "category": "SQLAlchemy",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": 4,
+    "title": "Difference between threading and asyncio",
+    "language": "Python",
+    "category": "Concurrency",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": 5,
+    "title": "How do Python decorators work?",
+    "language": "Python",
+    "category": "Python",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": 6,
+    "title": "What is dependency injection?",
+    "language": "General",
+    "category": "Architecture",
+    "difficulty": "beginner"
+  },
+  {
+    "id": 7,
+    "title": "How to upload files with FastAPI",
+    "language": "Python",
+    "category": "FastAPI",
+    "difficulty": "beginner"
+  },
+  {
+    "id": 8,
+    "title": "Why is my Docker container exiting immediately?",
+    "language": "General",
+    "category": "Docker",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": 9,
+    "title": "How to write async functions in Python",
+    "language": "Python",
+    "category": "AsyncIO",
+    "difficulty": "beginner"
+  },
+  {
+    "id": 10,
+    "title": "Difference between list and tuple in Python",
+    "language": "Python",
+    "category": "Python",
+    "difficulty": "beginner"
+  },
+  {
+    "id": 11,
+    "title": "What is JWT authentication?",
+    "language": "General",
+    "category": "Authentication",
+    "difficulty": "beginner"
+  },
+  {
+    "id": 12,
+    "title": "How to use Alembic migrations",
+    "language": "Python",
+    "category": "Alembic",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": 13,
+    "title": "How do Python generators work?",
+    "language": "Python",
+    "category": "Python",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": 14,
+    "title": "REST API vs GraphQL",
+    "language": "General",
+    "category": "API",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": 15,
+    "title": "How to deploy FastAPI with Docker",
+    "language": "Python",
+    "category": "Docker",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": 16,
+    "title": "How does cosine similarity work?",
+    "language": "General",
+    "category": "Vector Search",
+    "difficulty": "advanced"
+  },
+  {
+    "id": 17,
+    "title": "What are vector embeddings?",
+    "language": "General",
+    "category": "Vector Search",
+    "difficulty": "beginner"
+  },
+  {
+    "id": 18,
+    "title": "How does semantic search work?",
+    "language": "General",
+    "category": "Vector Search",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": 19,
+    "title": "How to use Pydantic models",
+    "language": "Python",
+    "category": "Pydantic",
+    "difficulty": "beginner"
+  },
+  {
+    "id": 20,
+    "title": "Difference between multiprocessing and multithreading",
+    "language": "Python",
+    "category": "Concurrency",
+    "difficulty": "advanced"
+  }
+]
