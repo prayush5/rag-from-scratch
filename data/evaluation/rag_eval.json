@@ -1,0 +1,34 @@
+[
+  {
+    "question": "What is FastAPI Dependency Injection?",
+    "expected_sources": ["dependencies.md"]
+  },
+  {
+    "question": "What does Depends do in FastAPI?",
+    "expected_sources": ["dependencies.md"]
+  },
+  {
+    "question": "What are yield dependencies used for in FastAPI?",
+    "expected_sources": ["dependencies.md"]
+  },
+  {
+    "question": "What is FastAPI middleware?",
+    "expected_sources": ["middleware.md"]
+  },
+  {
+    "question": "What are common use cases for FastAPI middleware?",
+    "expected_sources": ["middleware.md"]
+  },
+  {
+    "question": "How does FastAPI handle file uploads?",
+    "expected_sources": ["upload_file.md"]
+  },
+  {
+    "question": "What are the advantages of UploadFile?",
+    "expected_sources": ["upload_file.md"]
+  },
+  {
+    "question": "How does UploadFile handle large files?",
+    "expected_sources": ["upload_file.md"]
+  }
+]
