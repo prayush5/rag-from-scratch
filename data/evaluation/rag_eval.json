@@ -1,34 +1,42 @@
 [
   {
     "question": "What is FastAPI Dependency Injection?",
-    "expected_sources": ["dependencies.md"]
+    "expected_sources": ["dependencies.md"],
+    "reference_answer": "FastAPI Dependency Injection allows dependencies to be declared separately and automatically resolved and provided to path operation functions."
   },
   {
     "question": "What does Depends do in FastAPI?",
-    "expected_sources": ["dependencies.md"]
+    "expected_sources": ["dependencies.md"],
+    "reference_answer": "Depends is a function that declares a dependency, which can be injected into path operation functions as parameters."
   },
   {
     "question": "What are yield dependencies used for in FastAPI?",
-    "expected_sources": ["dependencies.md"]
+    "expected_sources": ["dependencies.md"],
+    "reference_answer": "Yield dependencies are used for managing resources that require setup and teardown, such as database connections or file handles."
   },
   {
     "question": "What is FastAPI middleware?",
-    "expected_sources": ["middleware.md"]
+    "expected_sources": ["middleware.md"],
+    "reference_answer": "Middleware in FastAPI is used to process requests and responses before they reach the path operation functions or after the response is generated."
   },
   {
     "question": "What are common use cases for FastAPI middleware?",
-    "expected_sources": ["middleware.md"]
+    "expected_sources": ["middleware.md"],
+    "reference_answer": "Common use cases for FastAPI middleware include authentication, logging, rate limiting, and CORS handling."
   },
   {
     "question": "How does FastAPI handle file uploads?",
-    "expected_sources": ["upload_file.md"]
+    "expected_sources": ["upload_file.md"],
+    "reference_answer": "FastAPI handles file uploads using the UploadFile class, which provides asynchronous file operations."
   },
   {
     "question": "What are the advantages of UploadFile?",
-    "expected_sources": ["upload_file.md"]
+    "expected_sources": ["upload_file.md"],
+    "reference_answer": "UploadFile provides advantages such as automatic file cleanup, asynchronous file operations, and proper handling of large files without loading them entirely into memory."
   },
   {
     "question": "How does UploadFile handle large files?",
-    "expected_sources": ["upload_file.md"]
+    "expected_sources": ["upload_file.md"],
+    "reference_answer": "UploadFile handles large files by using file-like objects with asynchronous read operations, allowing streaming of file data instead of loading the entire file into memory."
   }
 ]

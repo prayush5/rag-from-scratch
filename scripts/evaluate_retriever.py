@@ -58,7 +58,7 @@ print(f"Leaf nodes: {len(leaf_nodes)}")
 index = VectorStoreIndex(leaf_nodes)
 
 retriever = index.as_retriever(
-    similarity_top_k=3
+    similarity_top_k=10
 )
 
 
