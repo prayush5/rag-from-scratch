@@ -1,11 +1,14 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.api.v1 import chat, ingest
+from app.services.rag_service import RAGService
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    chat.get_rag_service()
+    print("Initializing RAG service...")
+    app.state.rag_service = RAGService()
     yield
+    print("Shutting down...")
 
 app = FastAPI(
     title="Document RAG",

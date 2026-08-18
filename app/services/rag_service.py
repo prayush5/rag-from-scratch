@@ -15,6 +15,7 @@ from llama_index.postprocessor.jinaai_rerank import JinaRerank
 from app.core.config import settings
 from app.db.qdrant import client as qdrant_client
 from app.ai.context_selector import select_context
+from app.ai.query_rewriter import QueryRewriter
 from app.schemas.chat import Message, ChatResponse
 
 class RAGService:
@@ -62,28 +63,10 @@ class RAGService:
         )
         self.model = "openai/gpt-oss-120b"
 
-    async def contextualize_question(self, question: str, history: list[Message]) -> str:
-        if not history:
-            return question
-        
-        history_str = "\n".join(f"{msg.role}: {msg.content}" for msg in history)
-        prompt = f"""Given the conversation below, rewrite the user's latest question into a standalone question that can be understood without the conversation history.
-
-Do not answer the question.
-
-Conversation:
-{history_str}
-
-Latest question:
-{question}
-
-Standalone question:"""
-        response = await self.llm_client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0,
+        self.query_rewriter = QueryRewriter(
+            llm_client=self.llm_client,
+            model=self.model
         )
-        return response.choices[0].message.content.strip()
 
     async def retrieve_parent_context(self, query: str) -> list[NodeWithScore]:
         fused_nodes = self.fusion_retriever.retrieve(query)
@@ -104,7 +87,7 @@ Standalone question:"""
         return list(parent_nodes.values())
 
     async def answer_question(self, question: str, history: list[Message]) -> ChatResponse:
-        standalone_question = await self.contextualize_question(question, history)
+        standalone_question = await self.query_rewriter.rewrite(question, history)
         context_nodes = await self.retrieve_parent_context(standalone_question)
 
         context_nodes = select_context(context_nodes, max_tokens=2000)
