@@ -1,5 +1,6 @@
 import os
 import app.ai.llama
+import asyncio
 
 from openai import AsyncOpenAI
 from llama_index.core import VectorStoreIndex, StorageContext
@@ -17,6 +18,7 @@ from app.db.qdrant import client as qdrant_client
 from app.ai.context_selector import select_context
 from app.ai.query_rewriter import QueryRewriter
 from app.schemas.chat import Message, ChatResponse
+from app.core.exceptions import RetrievalError, GenerationError
 
 class RAGService:
     def __init__(self):
@@ -69,31 +71,51 @@ class RAGService:
         )
 
     async def retrieve_parent_context(self, query: str) -> list[NodeWithScore]:
-        fused_nodes = self.fusion_retriever.retrieve(query)
-        reranked_nodes = self.reranker.postprocess_nodes(nodes=fused_nodes, query_str=query)
 
-        parent_nodes = {}
-        for node_with_score in reranked_nodes:
-            leaf_node = node_with_score.node
-            score = node_with_score.score
+        try:
+            fused_nodes = await asyncio.to_thread(self.fusion_retriever.retrieve, query)
+            reranked_nodes = await self.reranker.apostprocess_nodes(
+                nodes=fused_nodes,
+                query_str=query,
+            )
 
-            if leaf_node.parent_node:
-                parent_id = leaf_node.parent_node.node_id
-                parent_doc = self.docstore.get_document(parent_id)
-                parent_nodes[parent_id] = NodeWithScore(node=parent_doc, score=score)
-            else:
-                parent_nodes[leaf_node.node_id] = NodeWithScore(node=leaf_node, score=score)
+            parent_nodes = {}
 
-        return list(parent_nodes.values())
+            for node_with_score in reranked_nodes:
+                leaf_node = node_with_score.node
+                score = node_with_score.score
+
+                if leaf_node.parent_node:
+                    parent_id = leaf_node.parent_node.node_id
+                    parent_doc = self.docstore.get_document(parent_id)
+                    parent_nodes[parent_id] = NodeWithScore(node=parent_doc, score=score)
+                else:
+                    parent_nodes[leaf_node.node_id] = NodeWithScore(node=leaf_node, score=score)
+
+            return list(parent_nodes.values())
+        
+        except Exception as ex:
+            raise RetrievalError(
+                "Failed to retrieve parent context"
+            ) from ex
+
+
 
     async def answer_question(self, question: str, history: list[Message]) -> ChatResponse:
         standalone_question = await self.query_rewriter.rewrite(question, history)
         context_nodes = await self.retrieve_parent_context(standalone_question)
 
         context_nodes = select_context(context_nodes, max_tokens=2000)
-        context_nodes = self.context_reorder.postprocess_nodes(context_nodes)
+        context_nodes = await self.context_reorder.apostprocess_nodes(context_nodes)
 
-        raw_response = self.response_synthesizer.synthesize(standalone_question, nodes=context_nodes)
+
+        try:
+            raw_response = await self.response_synthesizer.asynthesize(standalone_question, nodes=context_nodes)
+        except Exception as ex:
+            raise GenerationError(
+                "Failed to generate response"
+            ) from ex
+
         answer = str(raw_response)
 
         context = "\n\n".join(node.node.get_content() for node in context_nodes)
