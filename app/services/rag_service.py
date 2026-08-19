@@ -19,6 +19,7 @@ from app.ai.context_selector import select_context
 from app.ai.query_rewriter import QueryRewriter
 from app.schemas.chat import Message, ChatResponse
 from app.core.exceptions import RetrievalError, GenerationError
+from app.observability.langfuse import langfuse
 
 class RAGService:
     def __init__(self):
@@ -71,64 +72,122 @@ class RAGService:
         )
 
     async def retrieve_parent_context(self, query: str) -> list[NodeWithScore]:
+        with langfuse.start_as_current_observation(
+            name="retrieval",
+            as_type="chain",
+            input={"query": query}
+        ) as observation:
+            try:
+                fused_nodes = await asyncio.to_thread(self.fusion_retriever.retrieve, query)
+                reranked_nodes = await self.reranker.apostprocess_nodes(
+                    nodes=fused_nodes,
+                    query_str=query,
+                )
 
-        try:
-            fused_nodes = await asyncio.to_thread(self.fusion_retriever.retrieve, query)
-            reranked_nodes = await self.reranker.apostprocess_nodes(
-                nodes=fused_nodes,
-                query_str=query,
-            )
+                parent_nodes = {}
 
-            parent_nodes = {}
+                for node_with_score in reranked_nodes:
+                    leaf_node = node_with_score.node
+                    score = node_with_score.score
 
-            for node_with_score in reranked_nodes:
-                leaf_node = node_with_score.node
-                score = node_with_score.score
+                    if leaf_node.parent_node:
+                        parent_id = leaf_node.parent_node.node_id
+                        parent_doc = self.docstore.get_document(parent_id)
+                        parent_nodes[parent_id] = NodeWithScore(node=parent_doc, score=score)
+                    else:
+                        parent_nodes[leaf_node.node_id] = NodeWithScore(node=leaf_node, score=score)
 
-                if leaf_node.parent_node:
-                    parent_id = leaf_node.parent_node.node_id
-                    parent_doc = self.docstore.get_document(parent_id)
-                    parent_nodes[parent_id] = NodeWithScore(node=parent_doc, score=score)
-                else:
-                    parent_nodes[leaf_node.node_id] = NodeWithScore(node=leaf_node, score=score)
-
-            return list(parent_nodes.values())
+                result = list(parent_nodes.values())
+                
+                observation.update(
+                    output={
+                        "fused_nodes": len(fused_nodes),
+                        "reranked_nodes": len(reranked_nodes),
+                        "parent_nodes": len(result)
+                    }
+                )
+            
+                return result
         
-        except Exception as ex:
-            raise RetrievalError(
-                "Failed to retrieve parent context"
-            ) from ex
-
-
+            except Exception as ex:
+                raise RetrievalError(
+                    "Failed to retrieve parent context"
+                ) from ex
 
     async def answer_question(self, question: str, history: list[Message]) -> ChatResponse:
-        standalone_question = await self.query_rewriter.rewrite(question, history)
-        context_nodes = await self.retrieve_parent_context(standalone_question)
+        with langfuse.start_as_current_observation(
+            name="rag-chat",
+            as_type="chain",
+            input={
+                "question": question,
+                "history": [msg.model_dump() for msg in history]
+            }
+        ) as trace:
 
-        context_nodes = select_context(context_nodes, max_tokens=2000)
-        context_nodes = await self.context_reorder.apostprocess_nodes(context_nodes)
+            standalone_question = await self.query_rewriter.rewrite(question, history)
+            retrieved_parent_nodes = await self.retrieve_parent_context(standalone_question)
 
+            # Instrument context selection window
+            with langfuse.start_as_current_observation(
+                name="context-selection",
+                as_type="chain",
+                input={
+                    "input_nodes": len(retrieved_parent_nodes),
+                    "max_tokens": 2000
+                }
+            ) as context_obs:
+                selected_nodes = select_context(retrieved_parent_nodes, max_tokens=2000)
+                estimated_tokens = sum(len(node.node.get_content()) // 4 for node in selected_nodes)
 
-        try:
-            raw_response = await self.response_synthesizer.asynthesize(standalone_question, nodes=context_nodes)
-        except Exception as ex:
-            raise GenerationError(
-                "Failed to generate response"
-            ) from ex
+                context_obs.update(
+                    output={
+                        "selected_nodes": len(selected_nodes),
+                        "estimated_tokens": estimated_tokens
+                    }
+                )
 
-        answer = str(raw_response)
+            context_nodes = await self.context_reorder.apostprocess_nodes(selected_nodes)
 
-        context = "\n\n".join(node.node.get_content() for node in context_nodes)
-        sources = []
-        for node in context_nodes:
-            source = node.node.metadata.get("file_name")
-            if source and source not in sources:
-                sources.append(source)
+            # --- Response Generation Observation ---
+            with langfuse.start_as_current_observation(
+                name="response-generation",
+                as_type="generation",
+                input={
+                    "prompt_query": standalone_question,
+                    "context_snippets": [node.node.get_content() for node in context_nodes],
+                },
+                model=self.model,
+            ) as gen_obs:
+                try:
+                    raw_response = await self.response_synthesizer.asynthesize(
+                        standalone_question, 
+                        nodes=context_nodes
+                    )
+                except Exception as ex:
+                    raise GenerationError("Failed to generate response") from ex
 
-        return ChatResponse(
-            question=question,
-            standalone_query=standalone_question,
-            answer=answer,
-            sources=sources,
-            context=context,
-        )
+                answer = str(raw_response)
+                gen_obs.update(output=answer)
+
+            context = "\n\n".join(node.node.get_content() for node in context_nodes)
+            sources = []
+            for node in context_nodes:
+                source = node.node.metadata.get("file_name")
+                if source and source not in sources:
+                    sources.append(source)
+        
+            trace.update(
+                output={
+                    "standalone_query": standalone_question,
+                    "answer": answer,
+                    "sources": sources
+                }
+            )
+        
+            return ChatResponse(
+                question=question,
+                standalone_query=standalone_question,
+                answer=answer,
+                sources=sources,
+                context=context,
+            )
