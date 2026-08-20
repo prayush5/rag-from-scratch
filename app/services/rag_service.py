@@ -12,6 +12,8 @@ from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.postprocessor import LongContextReorder
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from llama_index.postprocessor.jinaai_rerank import JinaRerank
+from app.core.prompts import RAG_SYSTEM_PROMPT
+from app.services.guardrail_service import GuardRailService
 
 from app.core.config import settings
 from app.db.qdrant import client as qdrant_client
@@ -23,6 +25,8 @@ from app.observability.langfuse import langfuse
 
 class RAGService:
     def __init__(self):
+        self.guardrail = GuardRailService()
+        
         docstore_path = "./storage/docstore/docstore.json"
         if not os.path.exists(docstore_path):
             raise FileNotFoundError("Docstore not found. Please run `python scripts/ingest_docs.py` first.")
@@ -59,7 +63,8 @@ class RAGService:
         )
 
         self.context_reorder = LongContextReorder()
-        self.response_synthesizer = get_response_synthesizer(response_mode="compact")
+        self.response_synthesizer = get_response_synthesizer(response_mode="compact", text_qa_template=RAG_SYSTEM_PROMPT)
+
         self.llm_client = AsyncOpenAI(
             api_key=settings.GROQ_API_KEY,
             base_url="https://api.groq.com/openai/v1",
@@ -123,6 +128,7 @@ class RAGService:
                 "history": [msg.model_dump() for msg in history]
             }
         ) as trace:
+            await self.guardrail.validate_content(text=question, role="user")
 
             standalone_question = await self.query_rewriter.rewrite(question, history)
             retrieved_parent_nodes = await self.retrieve_parent_context(standalone_question)
@@ -183,6 +189,8 @@ class RAGService:
                     "sources": sources
                 }
             )
+
+            await self.guardrail.validate_content(text=answer, role="agent")
         
             return ChatResponse(
                 question=question,
