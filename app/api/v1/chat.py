@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.chat import ChatRequest, ChatResponse
@@ -25,3 +25,13 @@ async def chat_endpoint(
     await repo.save_turn(session_id, payload.question, response.answer)
     response.session_id = session_id
     return response
+
+@router.delete("/admin/sessions/cleanup", status_code=status.HTTP_200_OK)
+async def cleanup_sessions(days: int = 30, db: AsyncSession = Depends(get_db)):
+    repo = ChatRepository(db)
+    deleted_count = await repo.cleanup_inactive_sessions(max_age_days=days)
+    return {
+        "status": "Success",
+        "message": f"Cleaned up {deleted_count} inactive sessions."
+    }
+    

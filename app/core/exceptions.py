@@ -27,3 +27,7 @@ class GenerationError(RAGServiceError):
 class ServiceUnavailableError(AppException):
     """Raised when an external dependency is unavailable."""
     status_code: int = 503
+
+class SafetyViolationError(AppException):
+    """Raised when request violates safety policy"""
+    status_code: int = 400

@@ -1,8 +1,9 @@
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete, update
 from app.db.models import ChatSessionModel, ChatMessageModel
 from app.schemas.chat import Message
+from datetime import datetime, timezone, timedelta
 
 class ChatRepository:
     def __init__(self, db_session: AsyncSession):
@@ -39,5 +40,24 @@ class ChatRepository:
         assistant_msg = ChatMessageModel(session_id=session_id, role="assistant", content=assistant_answer)
 
         self.db.add_all([user_msg, assistant_msg])
+        stmnt = (
+            update(ChatSessionModel)
+            .where(ChatSessionModel.id == session_id)
+            .values(updated_at=datetime.now(timezone.utc))
+        )
+
+        await self.db.execute(stmnt)
         await self.db.commit()
 
+
+    async def cleanup_inactive_sessions(self, max_age_days: int = 30) -> int:
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+
+        stmt = (
+            delete(ChatSessionModel)
+            .where(ChatSessionModel.updated_at < cutoff_date)
+        )
+        result = await self.db.execute(stmt)
+        await self.db.commit()
+        return result.rowcount 
+    

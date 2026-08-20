@@ -1,6 +1,8 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.v1 import chat, ingest
 from app.services.rag_service import RAGService
@@ -31,6 +33,22 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])
+app.include_router(ingest.router, prefix="/api/v1", tags=["Ingest"])
+
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "ok"
+    }
 
 @app.exception_handler(AppException)
 async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
@@ -43,13 +61,4 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
         }
     )
 
-
-app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])
-app.include_router(ingest.router, prefix="/api/v1", tags=["Ingest"])
-
-
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "ok"
-    }
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
