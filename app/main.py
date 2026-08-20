@@ -1,22 +1,36 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
 from app.api.v1 import chat, ingest
 from app.services.rag_service import RAGService
 from app.core.exceptions import AppException
-from fastapi.responses import JSONResponse
+from app.db.models import Base
+from app.db.session import engine
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Initializing RAG service...")
     app.state.rag_service = RAGService()
+
+    print("Initializing database tables...")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     yield
+
+    print("Shutting down database connection pool...")
+    await engine.dispose()
     print("Shutting down...")
+
 
 app = FastAPI(
     title="Document RAG",
     version="1.0.0",
     lifespan=lifespan
 )
+
 
 @app.exception_handler(AppException)
 async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
@@ -29,8 +43,10 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
         }
     )
 
+
 app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])
 app.include_router(ingest.router, prefix="/api/v1", tags=["Ingest"])
+
 
 @app.get("/health")
 async def health_check():

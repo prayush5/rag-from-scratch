@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str
     LLM_MODEL: str
     GROQ_API_KEY: str
+    DATABASE_URL: str
 
     LANGFUSE_PUBLIC_KEY: str
     LANGFUSE_SECRET_KEY: str
