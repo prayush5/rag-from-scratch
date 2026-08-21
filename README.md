@@ -1,4 +1,4 @@
-# Semantic Search API (RAG)
+# Document Chatbot
 
 A Retrieval-Augmented Generation (RAG) application built from scratch as part of my AI Engineering learning roadmap.
 
