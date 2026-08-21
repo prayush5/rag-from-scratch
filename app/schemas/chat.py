@@ -6,6 +6,7 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str = Field(..., description="User question")
+    history: list[Message] = Field(default_factory=list, description="Conversation history")
     session_id: str | None = Field(default=None, description="Optional conversation session ID")
 
 class ChatResponse(BaseModel):

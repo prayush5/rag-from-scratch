@@ -1,4 +1,6 @@
+import json
 from fastapi import APIRouter, Depends, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.chat import ChatRequest, ChatResponse
@@ -18,7 +20,6 @@ async def chat_endpoint(
     db: AsyncSession = Depends(get_db),
 ) -> ChatResponse:
     repo = ChatRepository(db)
-
     session_id = await repo.get_or_create_session(payload.session_id)
     history = await repo.get_history(session_id, limit=10)
     response = await rag_service.answer_question(question=payload.question, history=history)
@@ -26,12 +27,33 @@ async def chat_endpoint(
     response.session_id = session_id
     return response
 
-@router.delete("/admin/sessions/cleanup", status_code=status.HTTP_200_OK)
-async def cleanup_sessions(days: int = 30, db: AsyncSession = Depends(get_db)):
+@router.post("/chat/stream")
+async def chat_stream(
+    payload: ChatRequest,
+    rag_service: RAGService = Depends(get_rag_service),
+    db: AsyncSession = Depends(get_db),
+):
     repo = ChatRepository(db)
-    deleted_count = await repo.cleanup_inactive_sessions(max_age_days=days)
-    return {
-        "status": "Success",
-        "message": f"Cleaned up {deleted_count} inactive sessions."
-    }
-    
+
+    session_id = await repo.get_or_create_session(payload.session_id)
+    history = await repo.get_history(session_id, limit=10)
+
+    async def event_generator():
+        accumulated_answer = []
+        try:
+            async for event_type, data in rag_service.stream_answer_question(payload.question, history):
+                if event_type == "token":
+                    accumulated_answer.append(data)
+                    yield f"data: {json.dumps({'type': 'token', 'content': data})}\n\n"
+                
+                elif event_type == "metadata":
+                    yield f"data: {json.dumps({'type': 'metadata', 'session_id': session_id, 'sources': data['sources']})}\n\n"
+
+        finally:
+            if accumulated_answer:
+                full_response = "".join(accumulated_answer)
+                await repo.save_turn(session_id, payload.question, full_response)
+
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

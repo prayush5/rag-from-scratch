@@ -389,6 +389,16 @@
         background: var(--border);
         border-radius: 3px;
       }
+
+      .stream-chunk {
+        opacity: 0;
+        animation: fadeIn 0.3s ease forwards;
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(2px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
     </style>
   </head>
   <body>
@@ -433,7 +443,7 @@
       (function () {
         "use strict";
 
-        const API_URL = "http://localhost:8000/api/v1/chat";
+        const API_URL = "http://localhost:8000/api/v1/chat/stream";
         const STORAGE_KEY = "rag_session_id";
 
         let sessionId = localStorage.getItem(STORAGE_KEY) || null;
@@ -476,6 +486,55 @@
           scrollToBottom();
         }
 
+        function createSmoothRenderer(bubbleEl, wordsPerTick = 1, tickMs = 60) {
+          let queue = [];
+          let leftover = "";
+          let timerId = null;
+          let streamEnded = false;
+          let resolveDone = null;
+          const donePromise = new Promise((resolve) => { resolveDone = resolve; });
+
+          function tick() {
+            if (queue.length === 0) {
+              timerId = null;
+              if (streamEnded) resolveDone();
+              return;
+            }
+            const chunk = queue.splice(0, wordsPerTick).join("");
+            const span = document.createElement("span");
+            span.className = "stream-chunk";
+            span.textContent = chunk;
+            bubbleEl.appendChild(span);
+            scrollToBottom();
+            timerId = setTimeout(tick, tickMs);
+          }
+
+          return {
+            push(text) {
+              const combined = leftover + text;
+              const tokens = combined.match(/\S+\s*|\s+/g) || [];
+              if (tokens.length > 0 && !/\s$/.test(combined)) {
+                leftover = tokens.pop();
+              } else {
+                leftover = "";
+              }
+              queue.push(...tokens);
+              if (timerId === null) tick();
+            },
+            end() {
+              streamEnded = true;
+              if (leftover) {
+                queue.push(leftover);
+                leftover = "";
+              }
+              if (queue.length === 0 && timerId === null) resolveDone();
+            },
+            waitUntilDone() {
+              return donePromise;
+            }
+          };
+        }
+
         function appendTypingIndicator() {
           const row = document.createElement("div");
           row.className = "row assistant";
@@ -491,6 +550,34 @@
         function removeTypingIndicator() {
           const el = document.getElementById("typingRow");
           if (el) el.remove();
+        }
+
+        function createStreamingAssistantRow() {
+          hideEmptyState();
+
+          const row = document.createElement("div");
+          row.className = "row assistant";
+
+          const wrap = document.createElement("div");
+          wrap.className = "bubble-wrap";
+
+          const bubble = document.createElement("div");
+          bubble.className = "bubble";
+          bubble.textContent = "";
+
+          const citations = document.createElement("div");
+          citations.className = "citations";
+
+          wrap.appendChild(bubble);
+          wrap.appendChild(citations);
+          row.appendChild(wrap);
+          messagesEl.appendChild(row);
+          scrollToBottom();
+
+          return {
+            bubble, citations
+          };
+
         }
 
         function appendAssistantMessage(data) {
@@ -567,6 +654,11 @@
             session_id: sessionId,
           };
 
+          let assistantRowCreated = false;
+          let bubble = null;
+          let citations = null;
+          let renderer = null;
+
           try {
             const response = await fetch(API_URL, {
               method: "POST",
@@ -574,9 +666,8 @@
               body: JSON.stringify(payload),
             });
 
-            removeTypingIndicator();
-
             if (!response.ok) {
+              removeTypingIndicator();
               let detail = "";
               try {
                 const errJson = await response.json();
@@ -590,15 +681,54 @@
               return;
             }
 
-            const data = await response.json();
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
 
-            if (data.session_id) {
-              sessionId = data.session_id;
-              localStorage.setItem(STORAGE_KEY, sessionId);
-              updateSessionLabel();
+            while (true) {
+              const { done, value } = await reader.read();
+              console.log("reader.read() ->", { done, valueLen: value?.length });
+              if (done) break;
+
+              buffer += decoder.decode(value, { stream: true });
+              const parts = buffer.split("\n\n");
+              buffer = parts.pop(); // Retain incomplete fragment
+
+              for (const part of parts) {
+                if (part.startsWith("data: ")) {
+                  const data = JSON.parse(part.replace("data: ", ""));
+
+                  // Lazy-init: Replace typing dots only when first data event arrives
+                  if (!assistantRowCreated) {
+                    removeTypingIndicator();
+                    const rowObj = createStreamingAssistantRow();
+                    bubble = rowObj.bubble;
+                    citations = rowObj.citations;
+                    renderer = createSmoothRenderer(bubble, 1, 55)
+                    assistantRowCreated = true;
+                  }
+
+                  if (data.type === "token") {
+                    renderer.push(data.content);
+                  } else if (data.type === "metadata") {
+                    if (data.session_id) {
+                      sessionId = data.session_id;
+                      localStorage.setItem(STORAGE_KEY, sessionId);
+                      updateSessionLabel();
+                    }
+                    if (Array.isArray(data.sources)) {
+                      data.sources.forEach(function (src) {
+                        const chip = document.createElement("span");
+                        chip.className = "chip";
+                        chip.textContent = src;
+                        chip.title = src;
+                        citations.appendChild(chip);
+                      });
+                    }
+                  }
+                }
+              }
             }
-
-            appendAssistantMessage(data);
           } catch (err) {
             removeTypingIndicator();
             appendErrorMessage(
@@ -608,6 +738,10 @@
             );
             console.error(err);
           } finally {
+            if (renderer) {
+              renderer.end();
+              await renderer.waitUntilDone();
+            }
             setSending(false);
             inputEl.focus();
           }

@@ -1,9 +1,14 @@
-from qdrant_client import QdrantClient
+from qdrant_client import AsyncQdrantClient, QdrantClient
 from qdrant_client.models import Distance, VectorParams
 
 COLLECTION_NAME = "fastapi_documents"
 
 client = QdrantClient(
+    host="localhost",
+    port=6333
+)
+
+async_client = AsyncQdrantClient(
     host="localhost",
     port=6333
 )
