@@ -1,12 +1,14 @@
 import os
 import asyncio
-from llama_index.core import VectorStoreIndex, StorageContext
+from llama_index.core import VectorStoreIndex, StorageContext, Settings
 from llama_index.core.schema import NodeWithScore
 from llama_index.core.storage.docstore import SimpleDocumentStore
 from llama_index.retrievers.bm25 import BM25Retriever
 from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from llama_index.postprocessor.jinaai_rerank import JinaRerank
+from llama_index.embeddings.jinaai import JinaEmbedding
+from llama_index.llms.groq import Groq
 
 from app.core.config import settings
 from app.db.qdrant import client as qdrant_client
@@ -19,6 +21,9 @@ class RetrievalService:
         docstore_path = "./storage/docstore/docstore.json"
         if not os.path.exists(docstore_path):
             raise FileNotFoundError("Docstore not found. Please run `python scripts/ingest_docs.py` first.")
+
+        Settings.embed_model = JinaEmbedding(api_key=settings.JINA_API_KEY, model=settings.EMBEDDING_MODEL, task="retrieval.query")
+        Settings.llm = Groq(model=settings.LLM_MODEL, api_key=settings.GROQ_API_KEY)
 
         self.docstore = SimpleDocumentStore.from_persist_path(docstore_path)
         self.vector_store = QdrantVectorStore(client=qdrant_client, aclient=async_client, collection_name="fastapi_documents")
