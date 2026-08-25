@@ -7,6 +7,7 @@ from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.rag_service import RAGService
 from app.db.session import get_db
 from app.db.repository.chat_repository import ChatRepository
+from app.core.exceptions import SafetyViolationError
 
 router = APIRouter()
 
@@ -33,6 +34,8 @@ async def chat_stream(
     rag_service: RAGService = Depends(get_rag_service),
     db: AsyncSession = Depends(get_db),
 ):
+    await rag_service.guardrail.validate_content(text=payload.question, role="user")
+
     repo = ChatRepository(db)
 
     session_id = await repo.get_or_create_session(payload.session_id)
@@ -48,6 +51,10 @@ async def chat_stream(
                 
                 elif event_type == "metadata":
                     yield f"data: {json.dumps({'type': 'metadata', 'session_id': session_id, 'sources': data['sources']})}\n\n"
+        
+        except SafetyViolationError as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            return
 
         finally:
             if accumulated_answer:
