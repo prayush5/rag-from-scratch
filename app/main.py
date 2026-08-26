@@ -10,11 +10,14 @@ from app.core.exceptions import AppException
 from app.db.models import Base
 from app.db.session import engine
 
+from app.db.qdrant import init_collection
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Initializing RAG service...")
     app.state.rag_service = RAGService()
+    init_collection()
 
     print("Initializing database tables...")
     async with engine.begin() as conn:
@@ -35,7 +38,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:8000"],
     allow_methods=["*"],
     allow_headers=["*"],
 )

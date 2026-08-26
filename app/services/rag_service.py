@@ -26,7 +26,6 @@ class RAGService:
         self.query_rewriter = QueryRewriter(llm_client=self.llm_client, model=self.model)
         self.context_reorder = LongContextReorder()
 
-
     async def stream_answer_question(
         self, question: str, history: list[Message]
     ) -> AsyncGenerator[tuple[str, Any], None]:

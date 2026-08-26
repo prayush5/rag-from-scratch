@@ -1,7 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from app.schemas.ingest import IngestResponse
-from scripts.ingest_docs import run_ingestion
+from app.scripts.ingest_docs import run_ingestion
 from app.services.ingestion_status import ingestion_status
 from app.core.exceptions import IngestionError
 
