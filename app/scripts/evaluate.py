@@ -8,7 +8,7 @@ from deepeval.metrics import FaithfulnessMetric, AnswerRelevancyMetric, Contextu
 from deepeval.test_case import LLMTestCase
 
 from app.services.rag_service import RAGService
-from scripts.groq_eval_llm import GroqLLMJudge
+from app.scripts.groq_eval_llm import GroqLLMJudge
 
 TEST_DATASET = [
     {

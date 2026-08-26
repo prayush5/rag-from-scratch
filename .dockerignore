@@ -8,5 +8,3 @@ __pycache__/
 .env
 .pytest_cache/
 tests/
-scripts/
-README.md
