@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api.v1 import chat, ingest
+from app.api.v1 import chat, ingest, documents
 from app.services.rag_service import RAGService
 from app.core.exceptions import AppException
 from app.db.models import Base
@@ -46,6 +46,7 @@ app.add_middleware(
 
 app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])
 app.include_router(ingest.router, prefix="/api/v1", tags=["Ingest"])
+app.include_router(documents.router, prefix="/api/v1", tags=["Documents"])
 
 @app.get("/health")
 async def health_check():

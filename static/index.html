@@ -308,10 +308,13 @@
       }
 
       #inputWrap {
-        position: relative;
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
         background: var(--surface-2);
         border: 1px solid var(--border);
         border-radius: 12px;
+        padding: 6px 8px;
         transition: border-color 0.15s ease;
       }
 
@@ -320,16 +323,16 @@
       }
 
       #questionInput {
+        flex: 1;
         display: block;
-        width: 100%;
         resize: none;
         background: transparent;
         border: none;
         color: var(--text);
         font-family: var(--sans);
         font-size: 14px;
-        padding: 12px 48px 12px 13px;
-        min-height: 44px;
+        padding: 8px 4px;
+        min-height: 32px;
         max-height: 140px;
         line-height: 1.4;
         scrollbar-width: none;
@@ -349,9 +352,6 @@
       }
 
       #sendBtn {
-        position: absolute;
-        right: 8px;
-        bottom: 6px;
         background: var(--accent);
         color: #16221a;
         border: none;
@@ -378,6 +378,63 @@
 
       #sendBtn:not(:disabled):active {
         transform: scale(0.92);
+      }
+
+      #uploadBtn {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text-dim);
+        border-radius: 8px;
+        width: 32px;
+        height: 32px;
+        font-size: 18px;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: border-color 0.15s ease, color 0.15s ease;
+      }
+
+      #uploadBtn:hover {
+        border-color: var(--accent-dim);
+        color: var(--accent);
+      }
+
+      #uploadBtn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      #fileInput {
+        display: none;
+      }
+
+      .upload-status {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--text-dim);
+        padding: 6px 10px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .upload-status.error {
+        color: var(--error);
+      }
+
+      .upload-status .spinner {
+        width: 10px;
+        height: 10px;
+        border: 2px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
       }
 
       #messages::-webkit-scrollbar,
@@ -423,6 +480,8 @@
       <div id="composer">
         <form id="composerForm">
           <div id="inputWrap">
+            <button type="button" id="uploadBtn" title="Add files">+</button>
+            <input type="file" id="fileInput" accept=".pdf, .md">
             <textarea
               id="questionInput"
               rows="1"
@@ -444,6 +503,7 @@
         "use strict";
 
         const API_URL = "/api/v1/chat/stream";
+        const UPLOAD_URL = "/api/v1/documents/upload"
         const STORAGE_KEY = "rag_session_id";
 
         let sessionId = localStorage.getItem(STORAGE_KEY) || null;
@@ -456,6 +516,8 @@
         const sendBtnEl = document.getElementById("sendBtn");
         const sessionLabelEl = document.getElementById("sessionLabel");
         const newChatBtnEl = document.getElementById("newChatBtn");
+        const fileInputEl = document.getElementById("fileInput")
+        const uploadBtnEl = document.getElementById("uploadBtn")
 
         function updateSessionLabel() {
           sessionLabelEl.textContent = sessionId
@@ -485,6 +547,68 @@
           messagesEl.appendChild(row);
           scrollToBottom();
         }
+
+        function appendUploadStatus(text, isError = false) {
+          hideEmptyState();
+          const row = document.createElement("div");
+          row.className = "row assistant";
+          const status = document.createElement("div");
+          status.className = "upload-status" + (isError ? " error" : "");
+          status.innerHTML = isError ? text : `<span class="spinner"></span><span>${text}</span>`;
+          row.appendChild(status);
+          messagesEl.appendChild(row)
+          scrollToBottom()
+          return status;
+        }
+
+        async function uploadFile(file) {
+          uploadBtnEl.disabled = true;
+          const statusEl = appendUploadStatus(`Indexing "${file.name}"...`);
+
+          const formData = new FormData();
+          formData.append("file", file);
+
+          try {
+            const response = await fetch(UPLOAD_URL, {
+              method: "POST",
+              body: formData
+            });
+
+            if(!response.ok) {
+              let detail = "";
+              try {
+                const errJson = await response.json();
+                detail = errJson.detail || JSON.stringify(errJson);
+              } catch(_) {
+                detail = response.statusText;
+              }
+              statusEl.className = "upload-status error";
+              statusEl.textContent = `⚠ Upload failed: ${detail}`;
+              return;
+            }
+
+            const result = await response.json();
+            statusEl.className = "upload-status";
+            statusEl.innerHTML = `✓ Uploaded "${file.name}" — ingestion started`;
+          } catch(err) {
+            statusEl.className = "upload-status error";
+            statusEl.textContent = `⚠ Network error uploading "${file.name}"`;
+            console.error(err);
+          } finally {
+            uploadBtnEl.disabled = false;
+          }
+        }
+
+        uploadBtnEl.addEventListener("click", function() {
+          fileInputEl.click();
+        });
+
+        fileInputEl.addEventListener("change", function() {
+          const file = fileInputEl.files[0];
+          if (!file) return;
+          uploadFile(file);
+          fileInputEl.value = "";
+        });
 
         function createSmoothRenderer(bubbleEl, wordsPerTick = 1, tickMs = 60) {
           let queue = [];
@@ -777,7 +901,7 @@
           fresh.id = "emptyState";
           fresh.innerHTML = `
       <div class="glyph">◌</div>
-      Ask a question about your indexed markdown docs.<br>
+      Ask a question about your indexed documents.<br>
       Answers are grounded in retrieved chunks — sources shown below each reply.
     `;
           messagesEl.appendChild(fresh);

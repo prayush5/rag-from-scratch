@@ -41,12 +41,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-
     container_name: rag_fastapi
     restart: unless-stopped
 
     ports:
       - "8000:8000"
+
+    volumes:
+      - .:/app
 
     environment:
       # Docker service-to-service connections
@@ -72,13 +74,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-
       qdrant:
         condition: service_started
-
-    volumes:
-      - ./data:/app/data
-      - ./static:/app/static
 
 volumes:
   postgres_data:
