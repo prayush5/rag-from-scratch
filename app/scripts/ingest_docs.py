@@ -14,34 +14,42 @@ COLLECTION_NAME = "fastapi_documents"
 DOCSTORE_DIR = "./storage/docstore"
 DOCSTORE_PATH = os.path.join(DOCSTORE_DIR, "docstore.json")
 
-def purge_file_records(filename: str, docstore_path: str):
+def compute_sha256(file_path: str):
+    sha256 = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        while chunk := f.read(8192):
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
+def purge_file_records(file_names: set[str], docstore_path: str):
+    if not file_names:
+        return
+
     try:
         qdrant_client.delete(
             collection_name=COLLECTION_NAME,
             points_selector=models.FilterSelector(
                 filter=models.Filter(
-                    must=[models.FieldCondition(key="file_name", match=models.MatchValue(value=filename))]
+                    must=[models.FieldCondition(key="file_name", match=models.MatchAny(any=list(file_names)))]
                 )
             )
         )
     except Exception as e:
-        print(f"Qdrant purge warning for {filename}: {str(e)}")
+        print(f"Qdrant purge warning for {file_names}: {str(e)}")
 
     if os.path.exists(docstore_path):
         docstore = SimpleDocumentStore.from_persist_path(docstore_path)
-        matching_ids = [
+        nodes_to_delete = [
             node_id for node_id, node in docstore.docs.items()
-            if node.metadata.get("file_name") == filename
+            if node.metadata.get("file_name") in file_names
         ]
-
-        if matching_ids:
-            for node_id in matching_ids:
+        if nodes_to_delete:
+            for node_id in nodes_to_delete:
                 docstore.delete_document(node_id, raise_error=False)
             docstore.persist(persist_path=docstore_path)
-            print(f"Purged {len(matching_ids)} docstore node(s) for '{filename}'")
+            print(f"Purged {len(nodes_to_delete)} docstore node(s) for {len(file_names)} file(s)")
         else:
-            print(f"No matching docstore nodes found to purge for '{filename}'")
-
+            print(f"No matching docstore nodes found to purge for {file_names}")
 
 def run_ingestion(data_dir: str = "data", target_path: str = None):
     print("--- Starting Persistent Ingestion ---")
@@ -82,20 +90,9 @@ def run_ingestion(data_dir: str = "data", target_path: str = None):
 
                 print(f"Loaded {len(documents)} source documents")
 
-                unique_filenames = set()
-                for doc in documents:
-                    fname = doc.metadata.get("file_name")
-                    if not fname and doc.metadata.get("file_path"):
-                        fname = os.path.basename(doc.metadata["file_path"])
-                    elif not fname and target_path:
-                        fname = os.path.basename(target_path)
-                    
-                    if fname:
-                        doc.metadata["file_name"] = fname
-                        unique_filenames.add(fname)
+                unique_filenames = {doc.metadata.get("file_name") for doc in documents if doc.metadata.get("file_name")}
 
-                for fname in unique_filenames:
-                    purge_file_records(fname, DOCSTORE_PATH)
+                purge_file_records(unique_filenames, DOCSTORE_PATH)
 
                 node_parser = HierarchicalNodeParser.from_defaults(chunk_sizes=[500, 100])
                 nodes = node_parser.get_nodes_from_documents(documents)

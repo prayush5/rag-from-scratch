@@ -57,7 +57,7 @@ fusion_retriever = QueryFusionRetriever(
 #framework postprocessor
 reranker = JinaRerank(
     api_key=settings.JINA_API_KEY,
-    top_n=5,
+    top_n=3,
     model="jina-reranker-v2-base-multilingual"
 )
 
