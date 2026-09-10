@@ -7,7 +7,7 @@ from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreI
 from llama_index.core.storage.docstore import SimpleDocumentStore
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from app.core.exceptions import IngestionError
-from llama_index.readers.file import PDFReader
+from llama_index.readers.file import PDFReader, DocxReader
 from qdrant_client.http import models
 
 COLLECTION_NAME = "fastapi_documents"
@@ -65,14 +65,14 @@ def run_ingestion(data_dir: str = "data", target_path: str = None):
 
         try:
             init_collection()
-            file_extractor = {".pdf": PDFReader()}
+            file_extractor = {".pdf": PDFReader(), ".docx": DocxReader()}
 
             with langfuse.start_as_current_observation(
                 name="parse-and-chunk",
                 as_type="chain",
                 input={
                     "target_path": target_path or data_dir,
-                    "required_exts": [".md", ".pdf"]
+                    "required_exts": [".md", ".pdf", ".docx"]
                 }
             ) as chunk_obs:
 

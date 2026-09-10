@@ -6,7 +6,7 @@ from app.services.retrieval_service import RetrievalService
 async def main():
     service = RetrievalService()
 
-    query = "what are the features of spring boot?"
+    query = "what are the features of lang graph?"
 
     print(f"\nQUERY: {query}\n")
 

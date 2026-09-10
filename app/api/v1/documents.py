@@ -5,7 +5,7 @@ from app.scripts.ingest_docs import run_ingestion
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
-ALLOWED_EXTS = {".md", ".pdf"}
+ALLOWED_EXTS = {".md", ".pdf", ".docx"}
 DATA_DIR = "./data"
 
 @router.post("/upload", summary="Upload new documents for ingestion", status_code=status.HTTP_202_ACCEPTED)
