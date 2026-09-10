@@ -365,6 +365,7 @@
       }
 
       #inputWrap {
+        position: relative;
         display: flex;
         align-items: flex-end;
         gap: 8px;
@@ -504,6 +505,39 @@
         border-radius: 3px;
       }
 
+      #adminKeyPrompt {
+        position: absolute;
+        bottom: 100%;
+        left: 0;
+        margin-bottom: 8px;
+        display: flex;
+        gap: 6px;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px;
+      }
+
+      #adminKeyInput {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        padding: 6px 8px;
+        font-size: 13px;
+        width: 160px;
+      }
+
+      #adminKeySubmit {
+        background: var(--accent);
+        color: #16221a;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 10px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
       .stream-chunk {
         opacity: 0;
         animation: fadeIn 0.3s ease forwards;
@@ -539,6 +573,10 @@
           <div id="inputWrap">
             <button type="button" id="uploadBtn" title="Add files">+</button>
             <input type="file" id="fileInput" accept=".pdf, .md, .docx">
+            <div id="adminKeyPrompt" style="display: none;">
+              <input type="password" id="adminKeyInput" placeholder="Admin Key"/>
+              <button type="button" id="adminKeySubmit">OK</button>
+            </div>
             <textarea
               id="questionInput"
               rows="1"
@@ -565,6 +603,7 @@
 
         let sessionId = localStorage.getItem(STORAGE_KEY) || null;
         let isSending = false;
+        let adminKey = sessionStorage.getItem("admin_key") || null;
 
         const messagesEl = document.getElementById("messages");
         const emptyStateEl = document.getElementById("emptyState");
@@ -573,8 +612,47 @@
         const sendBtnEl = document.getElementById("sendBtn");
         const sessionLabelEl = document.getElementById("sessionLabel");
         const newChatBtnEl = document.getElementById("newChatBtn");
-        const fileInputEl = document.getElementById("fileInput")
-        const uploadBtnEl = document.getElementById("uploadBtn")
+        const fileInputEl = document.getElementById("fileInput");
+        const uploadBtnEl = document.getElementById("uploadBtn");
+        const adminKeyPromptEl = document.getElementById("adminKeyPrompt");
+        const adminKeyInputEl = document.getElementById("adminKeyInput");
+        const adminKeySubmitEl = document.getElementById("adminKeySubmit");
+
+        function askForAdminKey() {
+          return new Promise((resolve) => {
+            adminKeyPromptEl.style.display = "flex";
+            adminKeyInputEl.value = "";
+            adminKeyInputEl.focus();
+
+            function submit() {
+              const value = adminKeyInputEl.value.trim();
+              adminKeyPromptEl.style.display = "none";
+              adminKeySubmitEl.removeEventListener("click", submit);
+              adminKeyInputEl.removeEventListener("keydown", onkeydown);
+              resolve(value || null);
+            }
+
+            function onkeydown(e) {
+              if (e.key === "Enter") submit();
+              if (e.key === "Escape") {
+                adminKeyPromptEl.style.display = "none";
+                resolve(null);
+              }
+            }
+
+            adminKeySubmitEl.addEventListener("click", submit);
+            adminKeyInputEl.addEventListener("keydown", onkeydown);
+          })
+        }
+
+        function parseErrorDetail(errJson) {
+          const detail = errJson?.detail;
+          if (typeof detail === "string") return detail;
+          if (Array.isArray(detail)) {
+            return detail.map((d) => d.msg || JSON.stringify(d)).join("; ");
+          }
+          return JSON.stringify(detail) || "Unknown error";
+        }
 
         function updateSessionLabel() {
           sessionLabelEl.textContent = sessionId
@@ -619,6 +697,12 @@
         }
 
         async function uploadFile(file) {
+          if (!adminKey) {
+            adminKey = await askForAdminKey();
+            if (!adminKey) return;
+            sessionStorage.setItem("admin_key", adminKey);
+          }
+
           uploadBtnEl.disabled = true;
           const statusEl = appendUploadStatus(`Indexing "${file.name}"...`);
 
@@ -628,17 +712,21 @@
           try {
             const response = await fetch(UPLOAD_URL, {
               method: "POST",
-              body: formData
+              headers: { "X-Admin-Key": adminKey },
+              body: formData,
             });
 
-            if(!response.ok) {
+            if (response.status === 403 || response.status === 422 || response.status === 401) {
+              sessionStorage.removeItem("admin_key");
+              adminKey = null;
+              statusEl.className = "upload-status error";
+              statusEl.textContent = "⚠ Invalid or missing admin key.";
+              return;
+            }
+
+            if (!response.ok) {
               let detail = "";
-              try {
-                const errJson = await response.json();
-                detail = errJson.detail || JSON.stringify(errJson);
-              } catch(_) {
-                detail = response.statusText;
-              }
+              try { detail = parseErrorDetail(await response.json()); } catch (_) { detail = response.statusText; }
               statusEl.className = "upload-status error";
               statusEl.textContent = `⚠ Upload failed: ${detail}`;
               return;
@@ -646,8 +734,8 @@
 
             const result = await response.json();
             statusEl.className = "upload-status";
-            statusEl.innerHTML = `Uploaded "${file.name}" — ingestion started`;
-          } catch(err) {
+            statusEl.innerHTML = `Uploaded "${result.filename}" — ingestion started`;
+          } catch (err) {
             statusEl.className = "upload-status error";
             statusEl.textContent = `⚠ Network error uploading "${file.name}"`;
             console.error(err);

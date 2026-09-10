@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: str
     LANGFUSE_HOST: str
 
+    ADMIN_SECRET: str
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore"

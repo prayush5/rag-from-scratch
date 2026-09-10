@@ -1,7 +1,8 @@
 import os
 import shutil
-from fastapi import APIRouter, File, HTTPException, UploadFile, status, BackgroundTasks
+from fastapi import APIRouter, File, HTTPException, UploadFile, status, BackgroundTasks, Depends
 from app.scripts.ingest_docs import run_ingestion
+from app.core.security import verify_admin
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -9,7 +10,7 @@ ALLOWED_EXTS = {".md", ".pdf", ".docx"}
 DATA_DIR = "./data"
 
 @router.post("/upload", summary="Upload new documents for ingestion", status_code=status.HTTP_202_ACCEPTED)
-async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...), _: None = Depends(verify_admin)):
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_EXTS:
         raise HTTPException(
@@ -42,7 +43,7 @@ async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = 
 from app.services.document_service import delete_document_by_name
 
 @router.delete("/{filename}", summary="Delete document from Qdrant and storage")
-async def delete_document(filename: str):
+async def delete_document(filename: str, _: None = Depends(verify_admin)):
     file_path = os.path.join(DATA_DIR, filename)
     if not os.path.exists(file_path):
         raise HTTPException(
