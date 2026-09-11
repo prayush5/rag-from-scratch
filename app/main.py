@@ -4,6 +4,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from app.core.rate_limit import limiter
 
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
@@ -69,6 +72,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # API Routers
 app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])
