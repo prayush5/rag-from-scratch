@@ -17,7 +17,7 @@ class ChatRepository:
             if existing_session:
                 return existing_session.id
         
-        new_session = ChatSessionModel(id=session_id or str(uuid.uuid4()))
+        new_session = ChatSessionModel(id=str(uuid.uuid4()))
         self.db.add(new_session)
         await self.db.commit()
         return new_session.id

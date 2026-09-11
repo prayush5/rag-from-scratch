@@ -7,6 +7,7 @@ from app.core.rate_limit import limiter
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
+MAX_FILE_SIZE = 5 * 1024 * 1024
 ALLOWED_EXTS = {".md", ".pdf", ".docx"}
 DATA_DIR = "./data"
 
@@ -18,6 +19,13 @@ async def upload_document(request: Request, background_tasks: BackgroundTasks, f
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported extension '{ext}'. Only {', '.join(ALLOWED_EXTS)} are allowed"
+        )
+    
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File too large. Max size is {(MAX_FILE_SIZE/1024)/1024}MB"
         )
     
     os.makedirs(DATA_DIR, exist_ok=True)
