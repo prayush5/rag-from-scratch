@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.db.repository.chat_repository import ChatRepository
 from app.core.exceptions import SafetyViolationError
 from app.services.agent_service import stream_agent_answer
+from app.core.rate_limit import limiter
 
 router = APIRouter()
 
@@ -33,7 +34,9 @@ def get_agent(request: Request):
 #     return response
 
 @router.post("/chat/stream")
+@limiter.limit("10/minute")
 async def chat_stream(
+    request: Request,
     payload: ChatRequest,
     rag_service: RAGService = Depends(get_rag_service),
     db: AsyncSession = Depends(get_db),
@@ -71,7 +74,9 @@ async def chat_stream(
 
 
 @router.post("/chat/agent/stream")
+@limiter.limit("10/minute")
 async def chat_agent_stream(
+    request: Request,
     payload: ChatRequest,
     agent = Depends(get_agent),
     db: AsyncSession = Depends(get_db)

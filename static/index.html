@@ -964,9 +964,13 @@
               } catch (_) {
                 detail = response.statusText;
               }
-              appendErrorMessage(
-                "Request failed (" + response.status + "). " + detail,
-              );
+              if (response.status == 429) {
+                appendErrorMessage("You're sending messages too quickly. Try again in 1 minute.");
+              } else {
+                appendErrorMessage(
+                  "Request failed (" + response.status + "). " + detail,
+                );
+              }
               return;
             }
 

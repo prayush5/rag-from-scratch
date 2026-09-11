@@ -1,8 +1,9 @@
 import os
 import shutil
-from fastapi import APIRouter, File, HTTPException, UploadFile, status, BackgroundTasks, Depends
+from fastapi import APIRouter, File, HTTPException, UploadFile, status, BackgroundTasks, Depends, Request
 from app.scripts.ingest_docs import run_ingestion
 from app.core.security import verify_admin
+from app.core.rate_limit import limiter
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -10,7 +11,8 @@ ALLOWED_EXTS = {".md", ".pdf", ".docx"}
 DATA_DIR = "./data"
 
 @router.post("/upload", summary="Upload new documents for ingestion", status_code=status.HTTP_202_ACCEPTED)
-async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...), _: None = Depends(verify_admin)):
+@limiter.limit("3/minute")
+async def upload_document(request: Request, background_tasks: BackgroundTasks, file: UploadFile = File(...), _: None = Depends(verify_admin)):
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_EXTS:
         raise HTTPException(
