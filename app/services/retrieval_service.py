@@ -7,8 +7,10 @@ from llama_index.retrievers.bm25 import BM25Retriever
 from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from llama_index.postprocessor.jinaai_rerank import JinaRerank
-from llama_index.embeddings.jinaai import JinaEmbedding
+# from llama_index.embeddings.jinaai import JinaEmbedding
+from llama_index.embeddings.fastembed import FastEmbedEmbedding
 from llama_index.llms.groq import Groq
+
 
 from app.core.config import settings
 from app.db.qdrant import client as qdrant_client
@@ -20,9 +22,10 @@ class RetrievalService:
     def __init__(self):
         docstore_path = "./storage/docstore/docstore.json"
         if not os.path.exists(docstore_path):
-            raise FileNotFoundError("Docstore not found. Please run `python scripts/ingest_docs.py` first.")
+            raise FileNotFoundError("Docstore not found. Please run `python -m scripts/ingest_docs.py` first.")
 
-        Settings.embed_model = JinaEmbedding(api_key=settings.JINA_API_KEY, model=settings.EMBEDDING_MODEL, task="retrieval.query")
+        # Settings.embed_model = JinaEmbedding(api_key=settings.JINA_API_KEY, model=settings.EMBEDDING_MODEL, task="retrieval.query")
+        Settings.embed_model = FastEmbedEmbedding(model_name=settings.EMBEDDING_MODEL)
         Settings.llm = Groq(model=settings.LLM_MODEL, api_key=settings.GROQ_API_KEY)
 
         self.docstore = SimpleDocumentStore.from_persist_path(docstore_path)

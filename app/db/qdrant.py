@@ -16,7 +16,7 @@ def create_collection():
     client.create_collection(
         collection_name=COLLECTION_NAME,
         vectors_config=VectorParams(
-            size=1024,
+            size=settings.EMBEDDING_DIM,
             distance=Distance.COSINE
         )
     )

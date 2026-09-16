@@ -31,5 +31,3 @@ class ServiceUnavailableError(AppException):
 class SafetyViolationError(AppException):
     """Raised when request violates safety policy"""
     status_code: int = 400
-
-    

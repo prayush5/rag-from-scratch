@@ -2,6 +2,7 @@ from openai import AsyncOpenAI
 from llama_index.core.postprocessor import LongContextReorder
 from typing import AsyncGenerator, Any
 from fastapi.encoders import jsonable_encoder
+from fastembed import TextEmbedding
 
 from app.core.config import settings
 from app.ai.context_selector import select_context

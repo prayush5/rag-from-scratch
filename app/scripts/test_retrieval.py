@@ -6,7 +6,7 @@ from app.services.retrieval_service import RetrievalService
 async def main():
     service = RetrievalService()
 
-    query = "what are the features of lang graph?"
+    query = "explain digital certificates and certificate authorities"
 
     print(f"\nQUERY: {query}\n")
 

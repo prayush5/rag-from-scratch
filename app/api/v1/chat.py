@@ -79,8 +79,11 @@ async def chat_agent_stream(
     request: Request,
     payload: ChatRequest,
     agent = Depends(get_agent),
+    rag_service: RAGService = Depends(get_rag_service),
     db: AsyncSession = Depends(get_db)
 ):
+    await rag_service.guardrail.validate_content(text=payload.question, role="user")
+    
     repo = ChatRepository(db)
     session_id = await repo.get_or_create_session(payload.session_id)
 

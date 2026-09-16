@@ -4,7 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     JINA_API_KEY: str
-    EMBEDDING_MODEL: str
+    EMBEDDING_MODEL: str = "BAAI/bge-base-en-v1.5"
+    EMBEDDING_DIM: int = 768
     LLM_MODEL: str
     GROQ_API_KEY: str
     DATABASE_URL: str
