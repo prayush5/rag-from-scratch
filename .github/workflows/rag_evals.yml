@@ -31,6 +31,7 @@ jobs:
 
     env:
       PYTHONPATH: .
+      ORT_LOGGING_LEVEL: "3"
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
       LLM_MODEL: "openai/gpt-oss-120b"
