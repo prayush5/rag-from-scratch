@@ -28,6 +28,8 @@ jobs:
           --health-retries 5
 
     env:
+      LLM_MODEL: "openai/gpt-oss-120b"
+      EMBEDDING_MODEL: "BAAI/bge-base-en-v1.5"
       JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       DATABASE_URL: "postgresql+asyncpg://ci:ci@localhost:5432/ci"
