@@ -1,0 +1,12 @@
+[
+  {
+    "input": "How do I configure routing in FastAPI?",
+    "expected_output": "Use APIRouter to group path operations and include them in the main FastAPI app.",
+    "context": ["FastAPI provides the APIRouter class to split large applications into multiple files. You instantiate APIRouter and include it using app.include_router()."]
+  },
+  {
+    "input": "What is dependency injection in FastAPI?",
+    "expected_output": "FastAPI uses Depends to inject dependencies like database sessions or settings into path operation functions.",
+    "context": ["Dependency Injection in FastAPI is handled via the Depends function. It allows declaring shared logic, settings, and database connections easily."]
+  }
+]
