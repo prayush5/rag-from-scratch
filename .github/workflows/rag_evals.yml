@@ -67,6 +67,10 @@ jobs:
       - name: Pull Ollama Model
         run: ollama pull llama3.2:1b
 
+      - name: Verify Ollama is reachable
+        run: |
+          curl -sf http://localhost:11434/api/tags || (echo "Ollama not responding" && exit 1)
+
       - name: Ingest Test Corpus
         run: python -m app.scripts.ingest_docs
 
