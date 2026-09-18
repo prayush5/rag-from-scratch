@@ -8,11 +8,13 @@ on:
 jobs:
   evaluate:
     runs-on: ubuntu-latest
+
     services:
       qdrant:
         image: qdrant/qdrant:latest
         ports:
           - 6333:6333
+
       postgres:
         image: postgres:15
         env:
@@ -29,34 +31,44 @@ jobs:
 
     env:
       PYTHONPATH: .
-      LLM_MODEL: "llama-3.1-8b-instant"
-      EMBEDDING_MODEL: "BAAI/bge-base-en-v1.5"
-      JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
+      LLM_MODEL: "openai/gpt-oss-120b"
+      EMBEDDING_MODEL: "BAAI/bge-base-en-v1.5"
+      EMBEDDING_DIM: "768"
       DATABASE_URL: "postgresql+asyncpg://ci:ci@localhost:5432/ci"
       QDRANT_URL: "http://localhost:6333"
-      ADMIN_SECRET: "ci-placeholder"
+      ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
       LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
       LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
-      LANGFUSE_HOST: ${{ secrets.LANGFUSE_HOST }}
+      LANGFUSE_HOST: "https://cloud.langfuse.com"
+      EVAL_LLM_PROVIDER: "ollama"
+      EVAL_LLM_MODEL: "llama3.2:1b"
+      OLLAMA_BASE_URL: "http://localhost:11434"
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: "pip"
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Ingest test corpus
+      - name: Setup Ollama
+        uses: ai-action/setup-ollama@v2
+
+      - name: Pull Ollama Model
+        run: ollama pull llama3.2:1b
+
+      - name: Ingest Test Corpus
         run: python -m app.scripts.ingest_docs
 
-      - name: Run DeepEval regression test
+      - name: Run DeepEval Regression Test
         run: python -m app.scripts.run_eval

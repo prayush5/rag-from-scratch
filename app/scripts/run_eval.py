@@ -5,11 +5,13 @@ from deepeval.metrics import FaithfulnessMetric, AnswerRelevancyMetric
 from deepeval.test_case import LLMTestCase
 from langchain_core.messages import HumanMessage
 from pathlib import Path
-from app.ai.eval_model import GroqEvalModel
+# from app.ai.eval_model import GroqEvalModel
+from app.ai.eval_model import UniversalEvalModel
 
 from app.ai.agent import compile_agent
 
-groq_judge = GroqEvalModel()
+# groq_judge = GroqEvalModel()
+eval_llm = UniversalEvalModel()
 
 SCORE_THRESHOLD = 0.7
 DATASET_PATH = Path(__file__).resolve().parent.parent / "tests" / "data" / "golden_dataset.json"
@@ -20,8 +22,8 @@ async def evaluate_agent():
     
     agent = compile_agent(checkpointer=None)
 
-    faithfulness_metric = FaithfulnessMetric(threshold=SCORE_THRESHOLD, model=groq_judge)
-    relevancy_metric = AnswerRelevancyMetric(threshold=SCORE_THRESHOLD, model=groq_judge)
+    faithfulness_metric = FaithfulnessMetric(threshold=SCORE_THRESHOLD, model=eval_llm)
+    relevancy_metric = AnswerRelevancyMetric(threshold=SCORE_THRESHOLD, model=eval_llm)
 
     failed_cases = 0
 
