@@ -19,6 +19,7 @@ class UniversalEvalModel(DeepEvalBaseLLM):
                 model=self.model_name,
                 base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
                 temperature=0,
+                timeout=120
             )
         else:
             self.model = ChatGroq(

@@ -8,6 +8,7 @@ on:
 jobs:
   evaluate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     services:
       qdrant:
@@ -44,7 +45,7 @@ jobs:
       LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
       LANGFUSE_HOST: "https://cloud.langfuse.com"
       EVAL_LLM_PROVIDER: "ollama"
-      EVAL_LLM_MODEL: "llama3.2:1b"
+      EVAL_LLM_MODEL: "qwen2.5:1.5b"
       OLLAMA_BASE_URL: "http://localhost:11434"
 
     steps:
@@ -66,14 +67,25 @@ jobs:
         uses: ai-action/setup-ollama@v2
 
       - name: Pull Ollama Model
-        run: ollama pull llama3.2:1b
+        run: ollama pull qwen2.5:1.5b
 
       - name: Verify Ollama is reachable
         run: |
           curl -sf http://localhost:11434/api/tags || (echo "Ollama not responding" && exit 1)
 
+      - name: Test Ollama inference
+        run: |
+          time curl -sf http://localhost:11434/api/generate \
+            -H "Content-Type: application/json" \
+            -d '{
+              "model": "qwen2.5:1.5b",
+              "prompt": "Reply with exactly: OK",
+              "stream": false
+            }'
+
       - name: Ingest Test Corpus
         run: python -m app.scripts.ingest_docs
 
       - name: Run DeepEval Regression Test
-        run: python -m app.scripts.run_eval
+        run: |
+          python -u -m app.scripts.run_eval
