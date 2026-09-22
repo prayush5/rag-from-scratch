@@ -24,9 +24,9 @@ Built from scratch with a focus on understanding **RAG architecture, agent orche
        Query Rewriting              Router
               │                       │
        Hybrid Retrieval        ┌──────┴──────┐
-              │                 │             │
-          Reranking          No Search      Search
-              │                               │
+              │                │             │
+          Reranking         No Search      Search
+              │                              │
        Parent Recovery                  Documentation
               │                              Tool
        Context Selection                     │
