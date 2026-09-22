@@ -15,12 +15,21 @@ agent_llm = ChatGroq(
 )
 
 ROUTER_SYSTEM_PROMPT = """You have access to a documentation search tool that searches
-an internal knowledge base.
+an internal knowledge base covering a variety of topics — technical documentation,
+security concepts, and other reference material.
 
-Call search_documentation whenever the user asks a question about software architecture,
-frameworks, programming languages, or technical concepts.
+Call search_documentation whenever the question could plausibly be answered by
+something in that knowledge base — this includes factual, biographical, historical,
+or "trivia-shaped" questions, not just software/technical ones. Err on the side of
+searching when in doubt, since the tool will simply report back if nothing relevant
+is found.
 
-Only skip the tool for basic arithmetic, common non-technical trivia, or simple greetings."""
+Only skip the tool for things that clearly cannot be document lookups: basic
+arithmetic, casual conversation, or simple greetings.
+
+When calling the search tool, phrase the query as a standalone question that doesn't
+depend on earlier turns — resolve pronouns like "it" or "that" into the actual
+subject based on the conversation so far."""
 
 STRICT_CONTEXT_PROMPT = """Answer the question using ONLY the documentation excerpt below.
 If the excerpt does not fully answer the question, say exactly what it does cover and

@@ -33,14 +33,14 @@ async def upload_document(request: Request, background_tasks: BackgroundTasks, f
 
     try:
         with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            buffer.write(contents)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error saving file: {str(e)}"
         )
     finally:
-        file.file.close()
+        await file.close()
     
     background_tasks.add_task(run_ingestion, target_path=file_path)
 

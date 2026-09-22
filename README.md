@@ -1,209 +1,236 @@
-# Document Chatbot
+# RAG From Scratch — AI Documentation Assistant
 
-A Retrieval-Augmented Generation (RAG) application built from scratch as part of my AI Engineering learning roadmap.
+A production-oriented **RAG + LangGraph agent** built with FastAPI. The system answers questions from technical documentation using hybrid retrieval, reranking, persistent conversation memory, and structurally enforced grounding.
 
-The project ingests Markdown documentation, generates vector embeddings, stores them in Qdrant, retrieves semantically relevant chunks, and uses an LLM to generate grounded answers based only on the retrieved context.
-
----
-
-## Features
-
-- Document ingestion pipeline
-- Recursive Markdown document loader
-- Character-based document chunking with overlap
-- Batch embedding generation using Jina AI Embeddings
-- Vector storage with Qdrant
-- Semantic similarity search
-- Similarity score thresholding
-- Metadata filtering
-- Grounded answer generation using Groq LLM
-- Source citations in responses
-
----
+Built from scratch with a focus on understanding **RAG architecture, agent orchestration, retrieval quality, failure modes, and production hardening**.
 
 ## Architecture
 
-### Ingestion Pipeline
-
+```text
+                         User
+                          │
+                          ▼
+                     Guardrails
+                          │
+                          ▼
+                    Session / DB
+                          │
+              ┌───────────┴───────────┐
+              │                       │
+              ▼                       ▼
+        /chat/stream           /chat/agent/stream
+          Plain RAG              LangGraph Agent
+              │                       │
+       Query Rewriting              Router
+              │                       │
+       Hybrid Retrieval        ┌──────┴──────┐
+              │                 │             │
+          Reranking          No Search      Search
+              │                               │
+       Parent Recovery                  Documentation
+              │                              Tool
+       Context Selection                     │
+              │                         Strict Answer
+              ▼                              │
+          Groq LLM                    Supplement Check
+                                             │
+                                      Optional General
+                                           Answer
+                                             │
+                                             ▼
+                                          Finalize
 ```
-Markdown Documents
-        │
-        ▼
-Document Loader
-        │
-        ▼
-Chunker
-        │
-        ▼
-Jina Embeddings
-        │
-        ▼
-Qdrant Vector Database
-```
-
-### Query Pipeline
-
-```
-User Question
-        │
-        ▼
-Query Embedding
-        │
-        ▼
-Qdrant Semantic Search
-        │
-        ▼
-Similarity Filtering
-        │
-        ▼
-Context Builder
-        │
-        ▼
-Prompt Builder
-        │
-        ▼
-Groq LLM
-        │
-        ▼
-Grounded Answer
-```
-
----
 
 ## Tech Stack
 
-### Backend
+- **Python / FastAPI**
+- **Groq** — `openai/gpt-oss-120b`
+- **LangGraph** — agent orchestration
+- **LlamaIndex** — document processing / retrieval components
+- **FastEmbed + BAAI BGE** — local embeddings
+- **Qdrant** — vector database
+- **BM25 + Reciprocal Rank Fusion** — hybrid retrieval
+- **Jina Reranker** — reranking
+- **PostgreSQL** — sessions and agent memory
+- **Langfuse** — observability
+- **DeepEval** — RAG evaluation
+- **Docker / GitHub Actions**
 
-- Python
-- FastAPI
+No OpenAI API dependency in the application.
 
-### AI
+## RAG Pipeline
 
-- Groq
-- Jina AI Embeddings
-- OpenAI Python SDK (OpenAI-compatible APIs)
+```text
+Question
+   ↓
+Query Rewriting
+   ↓
+Dense Retrieval ──┐
+                  ├─→ RRF Fusion → Jina Reranker
+BM25 Retrieval ───┘
+                           ↓
+                    Parent Recovery
+                           ↓
+                    Context Selection
+                           ↓
+                       Groq LLM
+                           ↓
+                      Stream Answer
+```
 
-### Vector Database
+The system uses local embeddings to reduce API costs while retaining the existing retrieval quality.
 
-- Qdrant
+A retrieval stress test also identified failures involving heavy typos and similar-but-wrong frameworks. Typo correction was implemented as a **threshold-gated fallback**, avoiding an additional LLM call on normal queries.
 
-### Validation
+## Agent Architecture
 
-- Pydantic
+The agent uses a hand-built LangGraph `StateGraph` rather than `create_react_agent`.
 
----
+The graph separates documentation-grounded answers from general supplemental information:
+
+```text
+START
+  ↓
+Router
+  ↓
+Search Documentation
+  ↓
+Strict Documentation Answer
+  ↓
+Complete?
+ ┌───────┴───────┐
+Yes             No
+ │               │
+ ▼               ▼
+Finalize     General Answer
+                 │
+                 ▼
+              Finalize
+```
+
+The final response is assembled by application code rather than allowing the LLM to self-label which information came from documentation.
+
+This was introduced after testing exposed a false-citation/grounding issue with the earlier ReAct implementation.
+
+## Document Support
+
+Supports:
+
+- Markdown
+- PDF
+- DOCX
+
+Includes:
+
+- Upload
+- Incremental ingestion
+- Deduplication
+- Deletion
+- Retrieval validation
+
+## Production Hardening
+
+- Input guardrails on both chat routes
+- Admin-key authentication for document management
+- `hmac.compare_digest` for key comparison
+- `15/min` IP-based chat rate limiting
+- Upload size limits
+- Server-generated session IDs
+- Production API documentation disabled
+- Persistent LangGraph memory with PostgreSQL
+- Langfuse tracing
+
+## Evaluation
+
+A GitHub Actions regression suite runs against a small golden dataset using DeepEval.
+
+Current evaluation includes:
+
+- Faithfulness
+- Answer relevancy
+
+The evaluation judge is separated from the production LLM.
+
+The current free-tier CI setup successfully runs Faithfulness evaluation, while the Ollama `llama3.2:1b` judge currently encounters cancellation during `AnswerRelevancyMetric`. This remains an open CI evaluation issue rather than being hidden by lowering the regression threshold.
+
+Target threshold:
+
+```text
+0.70
+```
 
 ## Project Structure
 
 ```text
 app/
 ├── ai/
-│   ├── embedding.py
-│   └── llm.py
-│
+│   ├── agent.py
+│   ├── agent_tools.py
+│   ├── eval_model.py
+│   ├── llama.py
+│   └── query_rewriter.py
 ├── core/
-│   └── config.py
-│
-├── db/
-│   └── qdrant.py
-│
-├── schemas/
-│   ├── chunk.py
-│   └── document.py
-│
+│   ├── config.py
+│   ├── exceptions.py
+│   ├── security.py
+│   └── rate_limit.py
+├── routers/
+│   ├── chat.py
+│   └── documents.py
+├── scripts/
+│   ├── ingest_docs.py
+│   ├── test_retrieval.py
+│   ├── stress_test_retrieval.py
+│   └── run_eval.py
 ├── services/
-│   ├── loader.py
-│   ├── chunker.py
-│   ├── embedder.py
-│   ├── retriever.py
-│   └── generator.py
-│
-└── main.py
+│   ├── rag_service.py
+│   ├── retrieval_service.py
+│   ├── agent_service.py
+│   └── document_service.py
+└── tests/
+    └── data/
+        └── golden_dataset.json
 
-scripts/
-├── ingest_docs.py
-├── search.py
-└── rag.py
-
-data/
-├── fastapi/
-├── python/
-└── sqlalchemy/
+.github/
+└── workflows/
+    └── rag_evals.yml
 ```
 
----
+## Running Locally
 
-## Retrieval Features
+```bash
+git clone <repository-url>
+cd rag-from-scratch
 
-The retriever supports:
+docker compose up -d
 
-- Semantic vector search
-- Configurable Top-K retrieval
-- Similarity score thresholding
-- Metadata filtering by source
+python -m app.scripts.ingest_docs
 
-Example:
-
-```python
-results = await retrieve(
-    query="How do FastAPI dependencies work?",
-    limit=10,
-    score_threshold=0.75,
-    source="fastapi"
-)
+uvicorn app.main:app --reload
 ```
 
----
+Configure the required API keys and database/Qdrant settings through environment variables.
 
-## Example
+## Current Status
 
-```
-Question:
-How do SQLAlchemy relationships work?
+### Done
 
-↓
-
-Relevant chunks retrieved from Qdrant
-
-↓
-
-Grounded answer generated by the LLM
-
-↓
-
-Source:
-sqlalchemy/relationships.md
-```
-
----
-
-## What I Learned
-
-This project helped me understand the complete Retrieval-Augmented Generation workflow by implementing it from scratch instead of relying on frameworks.
-
-Key concepts explored include:
-
-- Embeddings
-- Vector similarity search
-- Chunking strategies
-- Metadata filtering
-- Prompt construction
-- Context retrieval
-- Grounded generation
-- Retrieval pipelines
-- RAG architecture
-
----
-
-## Future Improvements
-
-- Sentence-aware chunking
-- LlamaIndex integration
-- Hybrid search
-- Re-ranking
-- Conversation history
+- Full RAG pipeline
+- Hybrid retrieval + reranking
+- Multi-format ingestion
 - Streaming responses
-- PDF ingestion
-- Authentication
-- Docker support
-- Production deployment
+- LangGraph agent
+- Persistent agent memory
+- Grounding enforcement
+- Guardrails
+- Security hardening
+- Retrieval stress testing
+- Langfuse observability
+- DeepEval evaluation setup
+
+### Next
+
+- Complete deployment using managed PostgreSQL + Qdrant Cloud
+- Finish CI evaluation setup
+- Final CORS/error-handling cleanup
+- Decide whether to retain the standalone `/chat/stream` route alongside the agent route
