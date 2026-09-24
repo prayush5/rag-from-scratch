@@ -39,8 +39,14 @@ async def search_documentation(query: str):
     
     if not nodes:
         return "No relevant documentation found for the query."
+
+    RELEVANCE_THRESHOLD = 0.25
+    relevant_nodes = [n for n in nodes if n.score is not None and n.score >= RELEVANCE_THRESHOLD]
+
+    if not relevant_nodes:
+        return "No relevant documents found for this query."
     
-    selected_nodes = select_context(nodes, max_tokens=1200)
+    selected_nodes = select_context(relevant_nodes, max_tokens=1200)
 
     return "\n\n---\n\n".join(
         f"[Source: {n.node.metadata.get('file_name', 'unknown')}]\n{n.node.get_content()}"

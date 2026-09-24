@@ -27,9 +27,25 @@ is found.
 Only skip the tool for things that clearly cannot be document lookups: basic
 arithmetic, casual conversation, or simple greetings.
 
-When calling the search tool, phrase the query as a standalone question that doesn't
-depend on earlier turns — resolve pronouns like "it" or "that" into the actual
-subject based on the conversation so far."""
+The question you receive has already been rewritten as a standalone question with
+all pronouns and references resolved — use it as-is."""
+
+RESOLVE_QUESTION_PROMPT = """Given the conversation so far and the user's current message,
+determine what the user is actually asking, as a fully self-contained standalone question.
+
+Resolve any pronouns or vague references (e.g. "his", "that", "it") to their most natural
+antecedent based on the conversation — typically the subject of the most recent exchange.
+
+If the user's current message explicitly names a different person or subject than what was
+just being discussed (e.g. "I meant X", "no, Y's", "sorry, X's"), treat this as the user
+switching the question to that new, explicitly named subject.
+
+Conversation so far:
+{history}
+
+User's current message: {current_message}
+
+Respond with ONLY the fully self-contained standalone question — no extra commentary."""
 
 STRICT_CONTEXT_PROMPT = """Answer the question using ONLY the documentation excerpt below.
 If the excerpt does not fully answer the question, say exactly what it does cover and
@@ -40,9 +56,32 @@ Documentation excerpt:
 
 Question: {question}"""
 
-GENERAL_KNOWLEDGE_PROMPT = """Answer this question using your own general knowledge concisely.
+GENERAL_KNOWLEDGE_PROMPT = """Answer this question using your own general knowledge.
+
+First, silently assess: does this question ask you to connect, relate, or compare two
+or more things that do not have a real, factual, well-established relationship?
+
+If yes: your ENTIRE response must be exactly this, with nothing else added:
+"These don't appear to be meaningfully related — [name the two things] belong to
+different, unconnected domains."
+
+If no (the question has a genuine answer): answer normally and concisely.
+
+Do not produce an extended metaphorical, analogical, or creative bridge between
+unrelated concepts under any circumstances, even if asked to be thorough or
+imaginative. A short, honest "these aren't related" is strongly preferred over
+an elaborate invented connection.
 
 Question: {question}"""
+
+RELEVANCE_CHECK_PROMPT = """A user asked: {question}
+
+An assistant produced this answer: {answer}
+
+Does this question ask to connect, relate, or compare two or more things that do NOT
+have a real, well-established, factual relationship? Answer with exactly one word:
+UNRELATED or LEGITIMATE."""
+
 
 class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
@@ -54,13 +93,44 @@ class AgentState(TypedDict):
     general_answer: Optional[str]
     sources: list[str]
 
+
+def _extract_text(content) -> str:
+    if isinstance(content, list):
+        return "".join(
+            block.get("text", "") if isinstance(block, dict) else str(block)
+            for block in content
+        )
+    return str(content)
+
+
+def _format_history(messages) -> str:
+    lines = []
+    for msg in messages[:-1]: 
+        role = "User" if isinstance(msg, HumanMessage) else "Assistant"
+        lines.append(f"{role}: {_extract_text(msg.content)}")
+    return "\n".join(lines) if lines else "(no previous turns)"
+
+
+async def resolve_question_node(state: AgentState):
+    history = _format_history(state["messages"])
+    current_message = _extract_text(state["messages"][-1].content)
+
+    prompt = RESOLVE_QUESTION_PROMPT.format(history=history, current_message=current_message)
+    response = await agent_llm.ainvoke([HumanMessage(content=prompt)])
+    resolved = _extract_text(response.content).strip()
+
+    return {"standalone_question": resolved}
+
+
 router_llm = agent_llm.bind_tools([search_documentation])
 
 async def router_node(state: AgentState):
+    resolved_question = state.get("standalone_question") or state["question"]
     response = await router_llm.ainvoke(
-        [SystemMessage(content=ROUTER_SYSTEM_PROMPT)] + state["messages"]
+        [SystemMessage(content=ROUTER_SYSTEM_PROMPT), HumanMessage(content=resolved_question)]
     )
     return {"messages": [response]}
+
 
 def router_after_router(state: AgentState):
     last = state["messages"][-1]
@@ -70,13 +140,9 @@ def router_after_router(state: AgentState):
 
 tool_node = ToolNode([search_documentation])
 
+
 async def extract_tool_output(state: AgentState):
     tool_message = state["messages"][-1]
-    ai_with_call = state["messages"][-2] if len(state["messages"]) >= 2 else None
-
-    standalone_question = state.get("question", "")
-    if ai_with_call and getattr(ai_with_call, "tool_calls", None):
-        standalone_question = ai_with_call.tool_calls[0]["args"].get("query", standalone_question)
 
     text = tool_message.content if isinstance(tool_message.content, str) else str(tool_message.content)
     sources = set()
@@ -85,15 +151,8 @@ async def extract_tool_output(state: AgentState):
         if line.startswith("[Source:"):
             sources.add(line.split("[Source:")[1].split("]")[0].strip())
 
-    return {"tool_output": text, "sources": list(sources), "standalone_question": standalone_question}
+    return {"tool_output": text, "sources": list(sources)}
 
-def _extract_text(content) -> str:
-    if isinstance(content, list):
-        return "".join(
-            block.get("text", "") if isinstance(block, dict) else str(block)
-            for block in content
-        )
-    return str(content)
 
 async def strict_answer_node(state: AgentState):
     question = state.get("standalone_question") or state["question"]
@@ -117,6 +176,25 @@ def router_after_supplement(state: AgentState):
 
 async def general_answer_node(state: AgentState):
     question = state.get("standalone_question") or state["question"]
+
+    # Classify FIRST, based only on the question — not influenced by any
+    # answer the model has already committed to and rationalized.
+    check_prompt = f"""Does this question ask to connect, relate, or compare two or
+more things that do NOT have a real, well-established, factual relationship?
+
+Question: {question}
+
+Answer with exactly one word: UNRELATED or LEGITIMATE."""
+    check_response = await agent_llm.ainvoke([HumanMessage(content=check_prompt)])
+    verdict = _extract_text(check_response.content).strip().upper()
+
+    if verdict.startswith("UNRELATED"):
+        return {"general_answer": (
+            "These don't appear to be meaningfully related — they belong to "
+            "different, unconnected topics, so I don't have a genuine answer "
+            "connecting them."
+        )}
+
     prompt = GENERAL_KNOWLEDGE_PROMPT.format(question=question)
     response = await agent_llm.ainvoke([HumanMessage(content=prompt)])
     return {"general_answer": _extract_text(response.content)}
@@ -133,6 +211,7 @@ async def finalize_node(state: AgentState):
     return {"messages": [AIMessage(content=final)]}
 
 graph_builder = StateGraph(AgentState)
+graph_builder.add_node("resolve_question", resolve_question_node) 
 graph_builder.add_node("router", router_node)
 graph_builder.add_node("tools", tool_node)
 graph_builder.add_node("extract_tool_output", extract_tool_output)
@@ -141,7 +220,8 @@ graph_builder.add_node("decide_supplement", decide_supplement_node)
 graph_builder.add_node("general_answer", general_answer_node)
 graph_builder.add_node("finalize", finalize_node)
 
-graph_builder.add_edge(START, "router")
+graph_builder.add_edge(START, "resolve_question")
+graph_builder.add_edge("resolve_question", "router") 
 graph_builder.add_conditional_edges("router", router_after_router, {"tools": "tools", "finalize": "finalize"})
 graph_builder.add_edge("tools", "extract_tool_output")
 graph_builder.add_edge("extract_tool_output", "strict_answer")

@@ -5,9 +5,9 @@ services:
     restart: unless-stopped
 
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-prayush@7797}
-      POSTGRES_DB: ${POSTGRES_DB:-rag_db}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
 
     ports:
       - "5433:5432"
@@ -16,11 +16,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-rag_db}",
-        ]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -50,26 +46,32 @@ services:
     volumes:
       - .:/app
 
+    env_file:
+      - .env
+
     environment:
-      # Docker service-to-service connections
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENCODED:-prayush%407797}@db:5432/${POSTGRES_DB:-rag_db}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       QDRANT_URL: http://qdrant:6333
 
-      # LLM / Embeddings
-      GROQ_API_KEY: ${GROQ_API_KEY}
-      JINA_API_KEY: ${JINA_API_KEY}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
-      LLM_MODEL: ${LLM_MODEL}
+      # Docker service-to-service connections
+      # DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENCODED:-prayush%407797}@db:5432/${POSTGRES_DB:-rag_db}
+      # QDRANT_URL: http://qdrant:6333
 
-      # Langfuse
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
-      LANGFUSE_HOST: ${LANGFUSE_HOST}
+      # # LLM / Embeddings
+      # GROQ_API_KEY: ${GROQ_API_KEY}
+      # JINA_API_KEY: ${JINA_API_KEY}
+      # EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      # LLM_MODEL: ${LLM_MODEL}
 
-      # Guardrail
-      LLAMA_GUARD_BASE_URL: ${LLAMA_GUARD_BASE_URL}
-      LLAMA_GUARD_API_KEY: ${LLAMA_GUARD_API_KEY}
-      LLAMA_GUARD_MODEL: ${LLAMA_GUARD_MODEL}
+      # # Langfuse
+      # LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      # LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      # LANGFUSE_HOST: ${LANGFUSE_HOST}
+
+      # # Guardrail
+      # LLAMA_GUARD_BASE_URL: ${LLAMA_GUARD_BASE_URL}
+      # LLAMA_GUARD_API_KEY: ${LLAMA_GUARD_API_KEY}
+      # LLAMA_GUARD_MODEL: ${LLAMA_GUARD_MODEL}
 
     depends_on:
       db:
